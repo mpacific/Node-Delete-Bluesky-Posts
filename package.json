@@ -1,30 +1,24 @@
 {
-  "name": "node-delete-your-tweets",
+  "name": "node-delete-bluesky-posts",
   "version": "1.0.0",
-  "description": "Tweet/Like deleter",
-  "main": "index.js",
+  "description": "Bluesky post/like deleter",
+  "main": "index.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Mike Pacific",
   "license": "ISC",
   "dependencies": {
-    "bluebird": "^3.5.1",
-    "crypto-js": "^3.1.9-1",
-    "dotenv": "^5.0.1",
-    "lodash": "^4.17.5",
-    "moment": "^2.21.0",
-    "randomstring": "^1.1.5",
-    "request": "^2.83.0",
-    "request-promise": "^4.2.2"
+    "@atproto/api": "^0.13.12",
+    "dotenv": "^16.4.5",
+    "lodash": "^4.17.21",
+    "moment-timezone": "^0.5.46"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.7.8"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mpacific/Node-Delete-Your-Tweets.git"
-  },
-  "bugs": {
-    "url": "https://github.com/mpacific/Node-Delete-Your-Tweets/issues"
-  },
-  "homepage": "https://github.com/mpacific/Node-Delete-Your-Tweets#readme"
+    "url": "git+https://github.com/mpacific/Node-Delete-Bluesky-Posts.git"
+  }
 }
