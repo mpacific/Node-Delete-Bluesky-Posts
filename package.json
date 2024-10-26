@@ -8,6 +8,7 @@
   },
   "author": "Mike Pacific",
   "license": "ISC",
+  "type": "module",
   "dependencies": {
     "@atproto/api": "^0.13.12",
     "dotenv": "^16.4.5",
@@ -15,7 +16,13 @@
     "moment-timezone": "^0.5.46"
   },
   "devDependencies": {
-    "@types/node": "^22.7.8"
+    "@eslint/js": "^9.13.0",
+    "@types/node": "^22.7.8",
+    "eslint": "^9.13.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "globals": "^15.11.0",
+    "prettier": "3.3.3"
   },
   "repository": {
     "type": "git",
