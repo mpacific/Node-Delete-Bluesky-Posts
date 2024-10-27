@@ -14,6 +14,5 @@ A node script to run at a scheduled interval to delete your bluesky posts, repos
 - You may want to add this to a cron job to periodically clear out old posts.
 
 ## TODO
-- Delete likes
 - Tests
 - Fleshing out this README
