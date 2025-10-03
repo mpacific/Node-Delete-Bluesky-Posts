@@ -19,7 +19,7 @@ describe('bluesky library', function () {
     classUnderTest
 
   describe('deletePosts', function () {
-    describe('deletes two posts and one repost', function () {
+    describe('successfully deletes two posts and one repost', function () {
       before(async function () {
         process.env.BLUESKY_USERNAME = 'foo.bsky.social'
         process.env.BLUESKY_APP_PASSWORD = 'foo123'
@@ -150,7 +150,6 @@ describe('bluesky library', function () {
 
       it('console.log is called', async function () {
         Assert.equal(consoleLogStub.callCount, 9)
-        console.error(consoleLogStub.args)
       })
 
       it('successfully calls login', async function () {
