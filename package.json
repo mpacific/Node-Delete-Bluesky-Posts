@@ -11,7 +11,7 @@
   "author": "Mike Pacific",
   "license": "ISC",
   "dependencies": {
-    "@atproto/api": "^0.13.12",
+    "@atproto/api": "^0.17.0",
     "dotenv": "^16.4.5",
     "lodash": "^4.17.21",
     "moment-timezone": "^0.5.46"
