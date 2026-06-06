@@ -1,22 +1,23 @@
-const Assert = require('assert')
-const Sinon = require('sinon')
-const Moment = require('moment-timezone')
-const proxyquire = require('proxyquire')
+import Assert from 'assert'
+import Sinon from 'sinon'
+import Moment from 'moment-timezone'
+import proxyquire from 'proxyquire'
+import type Bluesky from '../../lib/bluesky'
 
 describe('bluesky library', function () {
-  let Bluesky,
-    loginStub,
-    getAuthorFeedData1,
-    getAuthorFeedData2,
-    getAuthorFeedData3,
-    getAuthorFeedStub,
-    getActorLikesData,
-    getActorLikesStub,
-    deleteRepostStub,
-    deletePostStub,
-    deleteLikeStub,
-    consoleLogStub,
-    classUnderTest
+  let BlueskyClass: typeof Bluesky,
+    loginStub: Sinon.SinonStub,
+    getAuthorFeedData1: unknown,
+    getAuthorFeedData2: unknown,
+    getAuthorFeedData3: unknown,
+    getAuthorFeedStub: Sinon.SinonStub,
+    getActorLikesData: unknown,
+    getActorLikesStub: Sinon.SinonStub,
+    deleteRepostStub: Sinon.SinonStub,
+    deletePostStub: Sinon.SinonStub,
+    deleteLikeStub: Sinon.SinonStub,
+    consoleLogStub: Sinon.SinonStub,
+    classUnderTest: Bluesky
 
   describe('deletePosts', function () {
     describe('successfully deletes two posts and one repost', function () {
@@ -136,11 +137,11 @@ describe('bluesky library', function () {
           }),
         }
 
-        Bluesky = proxyquire('../../lib/bluesky', {
+        BlueskyClass = proxyquire('../../lib/bluesky', {
           '@atproto/api': atProto,
-        })
+        }).default
 
-        classUnderTest = new Bluesky()
+        classUnderTest = new BlueskyClass()
         await classUnderTest.deletePosts()
       })
 

@@ -3,7 +3,7 @@
     "source.fixAll": "explicit"
   },
   "eslint.validate": [
-    "javascript"
+    "typescript"
   ],
   "coverage-gutters.coverageReportFileName": "coverage/lcov-report/index.html"
  }

@@ -1,7 +1,7 @@
-require('dotenv').config()
-const Bluesky = require('./lib/bluesky')
+import 'dotenv/config'
+import Bluesky from './lib/bluesky'
 
-const runScript = async function () {
+const runScript = async function (): Promise<void> {
   const bsky = new Bluesky()
 
   if (process.env.BLUESKY_DELETE_POSTS === 'true') {

@@ -1,3 +1,6 @@
 {
-  "reporter": ["text", "lcov"] 
+  "extends": "@istanbuljs/nyc-config-typescript",
+  "reporter": ["text", "lcov"],
+  "all": true,
+  "include": ["lib/**/*.ts", "index.ts"]
 }

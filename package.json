@@ -2,11 +2,13 @@
   "name": "node-delete-bluesky-posts",
   "version": "1.0.0",
   "description": "Bluesky post/like deleter",
-  "main": "index.ts",
+  "main": "dist/index.js",
   "scripts": {
-    "test": "NODE_ENV=test nyc mocha test/**/*",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "NODE_ENV=test nyc mocha",
     "lint": "eslint --fix .",
-    "start": "node index.js"
+    "start": "ts-node index.ts"
   },
   "author": "Mike Pacific",
   "license": "ISC",
@@ -18,7 +20,12 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.13.0",
+    "@istanbuljs/nyc-config-typescript": "^1.0.2",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^22.7.8",
+    "@types/proxyquire": "^1.3.31",
+    "@types/sinon": "^21.0.1",
+    "@types/source-map-support": "^0.5.10",
     "eslint": "^9.13.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-mocha": "^10.5.0",
@@ -28,7 +35,11 @@
     "nyc": "^17.1.0",
     "prettier": "3.3.3",
     "proxyquire": "^2.1.3",
-    "sinon": "^19.0.2"
+    "sinon": "^19.0.2",
+    "source-map-support": "^0.5.21",
+    "ts-node": "^10.9.2",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.1"
   },
   "repository": {
     "type": "git",
