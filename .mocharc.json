@@ -1,6 +1,0 @@
-{
-  "require": ["ts-node/register", "source-map-support/register"],
-  "spec": "test/**/*.ts",
-  "extension": ["ts"],
-  "node-option": ["no-experimental-strip-types"]
-}

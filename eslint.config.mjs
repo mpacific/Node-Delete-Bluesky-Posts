@@ -15,6 +15,10 @@ export default [
       semi: ['error', 'never'],
     },
   },
+  {
+    files: ['**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs', globals: globals.node },
+  },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
   eslintPluginPrettierRecommended,
