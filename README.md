@@ -19,6 +19,3 @@ A node script to run at a scheduled interval to delete your bluesky posts, repos
 - `npm run typecheck` — type-check without emitting.
 - `npm test` — run the Mocha test suite (via `ts-node`) with coverage.
 - `npm run lint` — run ESLint with `--fix`.
-
-## TODO
-- Fleshing out this README
