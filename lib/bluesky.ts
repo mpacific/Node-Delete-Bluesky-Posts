@@ -1,11 +1,31 @@
-import { BskyAgent, AppBskyFeedDefs } from '@atproto/api'
-import Moment from 'moment-timezone'
+import { AtUri, BskyAgent, AppBskyFeedDefs } from '@atproto/api'
 
 type FeedViewPost = AppBskyFeedDefs.FeedViewPost
+type Headers = Record<string, string | undefined>
 
 interface PostRecord {
   text?: string
   createdAt?: string
+}
+
+interface FeedPage {
+  headers: Headers
+  data: {
+    feed: FeedViewPost[]
+    cursor?: string
+  }
+}
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+// Verbose diagnostics, enabled with BLUESKY_DEBUG=true. They go to stderr so
+// they don't pollute the normal stdout output (or the bot log file, which only
+// redirects stdout).
+const debug = (msg: string): void => {
+  if (process.env.BLUESKY_DEBUG !== 'true') {
+    return
+  }
+  console.error(`[bsky ${new Date().toISOString()}] ${msg}`)
 }
 
 const recordOf = (post: FeedViewPost): PostRecord =>
@@ -18,152 +38,147 @@ export default class Bluesky {
 
   #login = async function (this: Bluesky): Promise<void> {
     if (this.#agent) {
+      debug('login: reusing existing authenticated agent')
       return
     }
 
+    debug('login: creating BskyAgent for https://bsky.social')
     this.#agent = new BskyAgent({
       service: 'https://bsky.social',
     })
 
+    debug(`login: authenticating as "${process.env.BLUESKY_USERNAME}"...`)
     await this.#agent.login({
       identifier: process.env.BLUESKY_USERNAME as string,
       password: process.env.BLUESKY_APP_PASSWORD as string,
     })
+    debug('login: authentication succeeded')
   }
 
-  #getAllPosts = async function (this: Bluesky): Promise<FeedViewPost[]> {
+  // We can keep deleting while the limit is unknown (-1) or we still have budget.
+  #hasBudget = function (this: Bluesky): boolean {
+    return this.#rateLimit === -1 || this.#rateLimit > 0
+  }
+
+  // Reads always report the current budget; a missing header means "unknown".
+  #trackRead = function (this: Bluesky, headers: Headers): void {
+    const remaining = parseInt(headers['ratelimit-remaining'] ?? '', 10)
+    this.#rateLimit = Number.isNaN(remaining) ? -1 : remaining
+  }
+
+  // Writes report the budget too; fall back to a local decrement if absent.
+  #trackWrite = function (this: Bluesky, headers: Headers): void {
+    const remaining = parseInt(headers['ratelimit-remaining'] ?? '', 10)
+    if (!Number.isNaN(remaining)) {
+      this.#rateLimit = remaining
+    } else if (this.#rateLimit > 0) {
+      this.#rateLimit -= 1
+    }
+  }
+
+  #isExpired = function (
+    this: Bluesky,
+    post: FeedViewPost,
+    maxDays: number,
+  ): boolean {
+    const createdAt = recordOf(post).createdAt
+    if (!createdAt) {
+      return false
+    }
+
+    const createdMs = Date.parse(createdAt)
+    if (Number.isNaN(createdMs)) {
+      return false
+    }
+
+    return createdMs < Date.now() - maxDays * MS_PER_DAY
+  }
+
+  #deleteRecord = async function (this: Bluesky, uri: string): Promise<void> {
+    const aturi = new AtUri(uri)
+    debug(
+      `deleteRecord: sending delete for ${aturi.collection}/${aturi.rkey} (repo ${aturi.hostname})`,
+    )
+    const response = await this.#agent!.com.atproto.repo.deleteRecord({
+      repo: aturi.hostname,
+      collection: aturi.collection,
+      rkey: aturi.rkey,
+    })
+    this.#trackWrite(response.headers)
+    debug(`deleteRecord: done; rate-limit budget now ${this.#rateLimit}`)
+  }
+
+  // Paginates a feed and deletes expired items one page at a time, so we never
+  // hold the whole feed in memory. `selectUri` returns the record to delete for
+  // a given feed item (the post itself, the repost, or the like).
+  #purge = async function (
+    this: Bluesky,
+    fetchPage: (cursor?: string) => Promise<FeedPage>,
+    maxDays: number,
+    selectUri: (post: FeedViewPost) => string | undefined,
+  ): Promise<number> {
     this.#cursor = undefined
-    let allPosts: FeedViewPost[] = []
-    const limit = 100
+    this.#rateLimit = -1
+    let deleted = 0
     let fetchMore = true
+    let iteration = 0
 
     while (fetchMore) {
-      if (this.#rateLimit === -1 || this.#rateLimit > 0) {
-        const response = await this.#agent!.getAuthorFeed({
-          actor: process.env.BLUESKY_USERNAME as string,
-          cursor: this.#cursor || undefined,
-          includePins: false,
-          limit,
-        })
+      iteration += 1
+      debug(
+        `purge: --- page ${iteration} --- cursor=${this.#cursor ?? '<none>'} budget=${this.#rateLimit}`,
+      )
 
-        this.#rateLimit = parseInt(
-          response.headers['ratelimit-remaining'] ?? '',
-        )
-        this.#cursor = response?.data?.cursor
-
-        if (response?.data?.feed?.length) {
-          allPosts = allPosts.concat(response.data.feed)
-        }
-
-        fetchMore = !!this.#cursor
-      } else {
+      if (!this.#hasBudget()) {
         throw new Error('Rate limit exceeded!')
       }
-    }
 
-    return allPosts
-  }
+      debug('purge: fetching page...')
+      const response = await fetchPage(this.#cursor || undefined)
+      this.#trackRead(response.headers)
+      const feed = response?.data?.feed ?? []
+      this.#cursor = response?.data?.cursor
+      debug(
+        `purge: page ${iteration} returned ${feed.length} item(s); ` +
+          `next cursor=${this.#cursor ?? '<none>'}; ` +
+          `ratelimit-remaining header=${response.headers['ratelimit-remaining'] ?? '<missing>'}`,
+      )
 
-  #getAllLikes = async function (this: Bluesky): Promise<FeedViewPost[]> {
-    this.#cursor = undefined
-    let allLikes: FeedViewPost[] = []
-    const limit = 100
-    let fetchMore = true
-
-    while (fetchMore) {
-      if (this.#rateLimit === -1 || this.#rateLimit > 0) {
-        const response = await this.#agent!.app.bsky.feed.getActorLikes({
-          actor: process.env.BLUESKY_USERNAME as string,
-          cursor: this.#cursor || undefined,
-          limit,
-        })
-
-        this.#rateLimit = parseInt(
-          response.headers['ratelimit-remaining'] ?? '',
-        )
-        this.#cursor = response?.data?.cursor
-
-        if (response?.data?.feed?.length) {
-          allLikes = allLikes.concat(response.data.feed)
-        } else {
-          fetchMore = false
+      let deletedThisPage = 0
+      for (const post of feed) {
+        if (!this.#isExpired(post, maxDays)) {
+          continue
         }
-      } else {
-        throw new Error('Rate limit exceeded!')
+
+        if (!this.#hasBudget()) {
+          throw new Error('Rate limit exceeded!')
+        }
+
+        const uri = selectUri(post)
+        if (!uri) {
+          debug('purge: expired item had no deletable uri; skipping')
+          continue
+        }
+
+        console.log(`Deleting ${uri} (created ${recordOf(post).createdAt})`)
+        await this.#deleteRecord(uri)
+        deleted += 1
+        deletedThisPage += 1
       }
+
+      // Stop when there is no cursor OR the page came back empty. Bluesky
+      // (notably getActorLikes) can keep returning a cursor on the trailing
+      // empty page, so relying on the cursor alone loops forever.
+      fetchMore = !!this.#cursor && feed.length > 0
+      debug(
+        `purge: page ${iteration} complete; deleted ${deletedThisPage} this page, ${deleted} total; fetchMore=${fetchMore}`,
+      )
     }
 
-    return allLikes
-  }
-
-  #getOldPosts = async function (
-    this: Bluesky,
-    allPosts: FeedViewPost[],
-    maxDays: string | number,
-  ): Promise<FeedViewPost[]> {
-    const postsToDelete: FeedViewPost[] = []
-    const minDate = Moment().subtract(maxDays, 'days')
-
-    if (allPosts?.length) {
-      for (const post of allPosts) {
-        const postDate = Moment(recordOf(post).createdAt)
-        if (postDate < minDate) {
-          postsToDelete.push(post)
-        }
-      }
-    }
-
-    return postsToDelete
-  }
-
-  #deleteOldPosts = async function (
-    this: Bluesky,
-    postsToDelete: FeedViewPost[],
-  ): Promise<void> {
-    console.log(`Deleting ${postsToDelete.length} posts.`)
-
-    for (const postToDelete of postsToDelete) {
-      if (this.#rateLimit === -1 || this.#rateLimit > 0) {
-        const record = recordOf(postToDelete)
-        console.log(`Deleting: ${record.text} (Created ${record.createdAt})`)
-
-        if (postToDelete?.reason?.$type === 'app.bsky.feed.defs#reasonRepost') {
-          await this.#agent!.deleteRepost(postToDelete.post.viewer!.repost!)
-        } else {
-          await this.#agent!.deletePost(postToDelete.post.uri)
-        }
-        console.log(`Deleted: ${record.text} (Created ${record.createdAt})`)
-
-        if (this.#rateLimit > 0) {
-          this.#rateLimit = this.#rateLimit - 1
-        }
-      } else {
-        throw new Error('Rate limit exceeded!')
-      }
-    }
-  }
-
-  #deleteOldLikes = async function (
-    this: Bluesky,
-    likesToDelete: FeedViewPost[],
-  ): Promise<void> {
-    console.log(`Deleting ${likesToDelete.length} likes.`)
-
-    for (const likeToDelete of likesToDelete) {
-      if (this.#rateLimit === -1 || this.#rateLimit > 0) {
-        const record = recordOf(likeToDelete)
-        console.log(`Deleting: ${record.text} (Created ${record.createdAt})`)
-
-        await this.#agent!.deleteLike(likeToDelete.post.viewer!.like!)
-        console.log(`Deleted: ${record.text} (Created ${record.createdAt})`)
-
-        if (this.#rateLimit > 0) {
-          this.#rateLimit = this.#rateLimit - 1
-        }
-      } else {
-        throw new Error('Rate limit exceeded!')
-      }
-    }
+    debug(
+      `purge: finished after ${iteration} page(s); deleted ${deleted} total`,
+    )
+    return deleted
   }
 
   deletePosts = async function (this: Bluesky): Promise<void> {
@@ -173,14 +188,22 @@ export default class Bluesky {
     }
     await this.#login()
 
-    const posts = await this.#getAllPosts()
-    const postsToDelete = await this.#getOldPosts(
-      posts,
-      process.env.POST_MAX_DAYS,
+    const deleted = await this.#purge(
+      (cursor) =>
+        this.#agent!.getAuthorFeed({
+          actor: process.env.BLUESKY_USERNAME as string,
+          cursor,
+          includePins: false,
+          limit: 100,
+        }),
+      Number(process.env.POST_MAX_DAYS),
+      (post) =>
+        post?.reason?.$type === 'app.bsky.feed.defs#reasonRepost'
+          ? post.post.viewer?.repost
+          : post.post.uri,
     )
-    await this.#deleteOldPosts(postsToDelete)
 
-    console.log(`Finished deleting posts`)
+    console.log(`Finished deleting posts. Deleted ${deleted} post(s).`)
   }
 
   deleteLikes = async function (this: Bluesky): Promise<void> {
@@ -190,13 +213,17 @@ export default class Bluesky {
     }
     await this.#login()
 
-    const likes = await this.#getAllLikes()
-    const likesToDelete = await this.#getOldPosts(
-      likes,
-      process.env.LIKE_MAX_DAYS,
+    const deleted = await this.#purge(
+      (cursor) =>
+        this.#agent!.app.bsky.feed.getActorLikes({
+          actor: process.env.BLUESKY_USERNAME as string,
+          cursor,
+          limit: 100,
+        }),
+      Number(process.env.LIKE_MAX_DAYS),
+      (post) => post.post.viewer?.like,
     )
-    await this.#deleteOldLikes(likesToDelete)
 
-    console.log(`Finished deleting likes`)
+    console.log(`Finished deleting likes. Deleted ${deleted} like(s).`)
   }
 }

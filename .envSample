@@ -6,3 +6,6 @@ POST_MAX_DAYS=60
 
 BLUESKY_DELETE_LIKES=true
 LIKE_MAX_DAYS=60
+
+# Set to true for verbose diagnostics on stderr
+BLUESKY_DEBUG=false
